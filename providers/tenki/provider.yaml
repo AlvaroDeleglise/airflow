@@ -1,0 +1,180 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+---
+package-name: apache-airflow-providers-tenki
+name: Tenki Sandbox
+description: |
+  `Tenki <https://tenki.sh/>`__ sandbox executor.
+
+  Runs each Airflow task inside a dedicated, ephemeral Tenki sandbox (an isolated micro-VM)
+  provisioned through the Tenki sandbox SDK. The scheduler builds a workload and passes it to
+  the ``TenkiExecutor``, which serializes it into a Task SDK command, launches a sandbox that
+  runs the same Airflow code as the scheduler, and polls the sandbox until it finishes. This
+  gives strong per-task isolation and lets individual tasks request their own image, CPU,
+  memory and environment. The ``TenkiExecutor`` can co-exist with other executors (for example
+  ``LocalExecutor`` or ``KubernetesExecutor``) in the same Airflow deployment.
+
+state: not-ready
+lifecycle: incubation
+source-date-epoch: 1783356304
+# Note that those versions are maintained by release manager - do not update them manually
+versions:
+  - 1.0.0
+
+integrations:
+  - integration-name: Tenki Sandbox
+    external-doc-url: https://tenki.sh/
+    how-to-guide:
+      - /docs/apache-airflow-providers-tenki/executors/tenki-executor.rst
+    tags: [software]
+
+executors:
+  - airflow.providers.tenki.executors.TenkiExecutor
+
+hooks:
+  - integration-name: Tenki Sandbox
+    python-modules:
+      - airflow.providers.tenki.hooks.tenki
+
+connection-types:
+  - hook-class-name: airflow.providers.tenki.hooks.tenki.TenkiSandboxHook
+    connection-type: tenki
+
+config:
+  tenki_executor:
+    description: |
+      This section only applies if you are using the TenkiExecutor in the
+      ``[core] executor`` configuration value above.
+    options:
+      conn_id:
+        description: |
+          The Airflow connection (i.e. credentials) used by the Tenki executor to authenticate
+          against the Tenki sandbox service. The connection ``password`` holds the API auth token,
+          ``host`` the API base URL and ``extra`` may carry ``gateway_url`` and ``timeout``. The
+          ``auth_token`` / ``base_url`` / ``gateway_url`` options below take precedence when set.
+        version_added: ~
+        type: string
+        example: ~
+        default: "tenki_default"
+      auth_token:
+        description: |
+          API auth token passed to ``tenki_sandbox.Client``. Overrides the ``password`` of the
+          connection referenced by ``conn_id`` when provided. Prefer storing the token in the
+          connection or a secrets backend rather than in plain configuration.
+        version_added: ~
+        type: string
+        sensitive: true
+        example: ~
+        default: ~
+      base_url:
+        description: |
+          Control-plane base URL passed to ``tenki_sandbox.Client``. Overrides the connection
+          ``host`` when provided. When unset, the SDK default (or ``TENKI_API_ENDPOINT``) is used.
+        version_added: ~
+        type: string
+        example: "https://api.tenki.cloud"
+        default: ~
+      gateway_url:
+        description: |
+          Data-plane gateway URL passed to ``tenki_sandbox.Client``. Overrides the connection
+          ``extra['gateway_url']`` when provided.
+        version_added: ~
+        type: string
+        example: ~
+        default: ~
+      project_id:
+        description: |
+          Tenki project id sandboxes are created under. Required by the service when creating a
+          sandbox (it can be found in the Tenki console or from the ``who_am_i`` identity). Can be
+          overridden per task via ``executor_config``.
+        version_added: ~
+        type: string
+        example: "0197a921-49f5-72b7-abef-0f54430f49ef"
+        default: ~
+      workspace_id:
+        description: |
+          Tenki workspace id sandboxes are created under (when not implied by the auth token).
+        version_added: ~
+        type: string
+        example: ~
+        default: ~
+      image:
+        description: |
+          Default container image each sandbox runs. It must contain the same Airflow
+          distribution and Dag code as the scheduler. Can be overridden per task via
+          ``executor_config``.
+        version_added: ~
+        type: string
+        example: "myregistry/airflow:3.0.0"
+        default: ~
+      cpu_cores:
+        description: |
+          Default number of CPU cores requested for each sandbox. Can be overridden per task
+          via ``executor_config``. Under-provisioning may cause the sandbox to be terminated on
+          start; ``2`` cores / ``4096`` MB is a safe baseline.
+        version_added: ~
+        type: integer
+        example: "2"
+        default: ~
+      memory_mb:
+        description: |
+          Default memory (in MB) requested for each sandbox. Can be overridden per task via
+          ``executor_config``. Very small values (e.g. ``512``) may cause the sandbox to be
+          terminated on start.
+        version_added: ~
+        type: integer
+        example: "4096"
+        default: ~
+      disk_size_gb:
+        description: |
+          Default disk size (in GB) requested for each sandbox.
+        version_added: ~
+        type: integer
+        example: ~
+        default: ~
+      idle_timeout_minutes:
+        description: |
+          Idle timeout (in minutes) after which an orphaned sandbox is reclaimed by Tenki. Acts
+          as a safety net for sandboxes left behind if the scheduler is killed mid-task.
+        version_added: ~
+        type: integer
+        example: "30"
+        default: ~
+      create_sandbox_kwargs:
+        description: |
+          A JSON object of extra keyword arguments merged into ``tenki_sandbox.Client.create()``
+          for every task (for example default ``tags`` or ``env``). Task-level ``executor_config``
+          is merged last and wins over these values.
+        version_added: ~
+        type: string
+        example: '{"tags": ["airflow"]}'
+        default: ~
+      check_health_on_startup:
+        description: |
+          Whether to check the health of the Tenki sandbox service when the executor starts.
+        version_added: ~
+        type: boolean
+        example: ~
+        default: "True"
+      max_run_sandbox_attempts:
+        description: |
+          The maximum number of times the executor should attempt to launch (or relaunch) a
+          sandbox for a task before marking it failed.
+        version_added: ~
+        type: integer
+        example: ~
+        default: "3"
